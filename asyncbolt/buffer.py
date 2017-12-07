@@ -138,11 +138,8 @@ class ChunkedReadBuffer:
 
     def read(self, num):
         self._ensure_buffer()
-        try:
-            if self._current_pos + num > self._current_buf_size:
-                return BufferError('Not enough bytes to read in current buffer')
-        except:
-            import ipdb; ipdb.set_trace()
+        if self._current_pos + num > self._current_buf_size:
+            return BufferError('Not enough bytes to read in current buffer')
         result = self._current_buf[self._current_pos:self._current_pos + num]
         self._current_pos += num
         if self.at_eof and self._num_queued_bufs == 0:  # check
