@@ -63,9 +63,9 @@ kwargs:
 ```python
 loop = asyncio.get_event_loop()
 
-client = await connect('tcp://localhost:7687', loop,
-                       protocol_class=Neo4jBoltClientProtocol,
-                       username='neo4j', password='password')
+client = await asyncbolt.connect('tcp://localhost:7687', loop,
+                                 protocol_class=Neo4jBoltClientProtocol,
+                                 username='neo4j', password='password')
     
 async for msg in client.run("RETURN 1 AS num", {}):
     print(msg)
