@@ -159,7 +159,7 @@ class BoltServerProtocol(BoltProtocol):
                     self.state = ServerProtocolState.PROTOCOL_READY
                 elif data.signature == messaging.Message.DISCARD_ALL:
                     self.on_discard_all()
-                    self.read_buffer = buffer.ChunkedReadBuffer()
+                    self.write_buffer = buffer.ChunkedWriteBuffer(8192)
                     self.state = ServerProtocolState.PROTOCOL_READY
                 else:
                     self.state = ServerProtocolState.PROTOCOL_FAILED
@@ -205,16 +205,10 @@ class BoltServerProtocol(BoltProtocol):
 class BoltClientProtocol(BoltProtocol):
     """Implement the Bolt protocol for client"""
 
-    def __init__(self, loop, **kwargs):
+    def __init__(self, loop):
         super().__init__(loop)
-        self._uri = kwargs.get('uri')
         self.waiter = asyncio.Future(loop=self.loop)
         self.handshake_waiter = asyncio.Future(loop=self.loop)
-
-    # Read only properties
-    @property
-    def uri(self):
-        return self._uri
 
     # Asyncio protocol methods
     def connection_lost(self, exc):

@@ -2,6 +2,8 @@ import asyncio
 import collections
 import logging
 
+from urllib.parse import urlparse
+
 from asyncbolt import protocol
 
 
@@ -12,90 +14,95 @@ log_warning = logger.warning
 log_error = logger.error
 
 
-class ServerSession(protocol.BoltServerProtocol):
-    """Implement the Bolt protocol for server"""
+async def create_server(uri, loop, protocol_class, **kwargs):
+    if isinstance(uri, str):
+        uri = urlparse(uri)
+    asyncbolt_server = Server(loop)
+    server = await loop.create_server(
+        lambda: protocol_class(loop, server=asyncbolt_server, **kwargs), uri.hostname, uri.port)
+    asyncbolt_server.attach_server(server)
+    return asyncbolt_server
 
-    def __init__(self, loop, *, server=None):
+
+class ServerSession(protocol.BoltServerProtocol):
+    """asyncio based implementation of a Bolt server session"""
+
+    def __init__(self, loop, **kwargs):
         super().__init__(loop)
-        self.server = server
+        self.server = kwargs.get('server')  # I want to be managed!
         self.queue = asyncio.Queue()
-        self.task_queue_handler = self.loop.create_task(self.run_task_queue())
-        self.active_run_task = None
+        self.task_queue_handler = self.loop.create_task(self._run_task_queue())
         self.waiters = collections.deque()
         self.waiters_append = self.waiters.append
         self.waiters_popleft = self.waiters.popleft
         self.close_handler = None
 
+    def connection_made(self, transport):
+        if self.server:
+            self.server.add_connection(self)
+        super().connection_made(transport)
+
+    def connection_lost(self, exc):
+        if self.server:
+            self.server.remove_connection(self)
+        self.close()
+
     def close(self):
-        self.state = protocol.ServerProtocolState.PROTOCOL_CLOSED
-        if self.active_run_task:
-            self.active_run_task.cancel()
         self.task_queue_handler.cancel()
         self.transport = None
-        self.close_handler = self.loop.create_task(self.wait_closed())
+        self.state = protocol.ServerProtocolState.PROTOCOL_CLOSING
 
     async def wait_closed(self):
-        if self.active_run_task:
-            try:
-                await self.active_run_task
-            except asyncio.CancelledError:
-                pass
-        try:
-            await self.task_queue_handler
-        except asyncio.CancelledError:
-            pass
+        await self.task_queue_handler
+        self.task_queue_handler = None
         self.state = protocol.ServerProtocolState.PROTOCOL_CLOSED
 
     def restart_task_queue(self):
         if self.task_queue_handler:
             self.task_queue_handler.cancel()
-        self.task_queue_handler = self.loop.create_task(self.run_task_queue())
+        self.task_queue_handler = self.loop.create_task(self._run_task_queue())
 
-    async def run_task_queue(self):
-        while True:
+    async def _run_task_queue(self):
+        try:
+            task, future = await self.queue.get()
+            fields = await task
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            self.state = protocol.ServerProtocolState.PROTOCOL_FAILED
+            self.failure({})
             try:
-                active_run_task, future = await self.queue.get()
-                self.active_run_task = self.loop.create_task(active_run_task)
-                fields = await self.active_run_task
-            except asyncio.CancelledError:
+                # TODO should have a timeout here
+                # This is a bit weird
+                await future
+                self.ignored({})
+            except:
                 pass
-            except Exception as e:
-                self.state = protocol.ServerProtocolState.PROTOCOL_FAILED
-                self.failure({})
-                try:
-                    await future
-                    self.ignored({})
-                except:
-                    pass  # look into this
-                self.flush()
-            else:
-                self.success({})
-                self.record([fields])
-                self.success({})
-                await future  # Pull All is called, flush queue...
-                self.flush()
-                self.active_run_task = None
-                log_debug("Packed fields '{}'".format(fields))
-
-    def discard_run_task(self, *_):
-        self.active_run_task = None
+            self.flush()
+        else:
+            self.success({})
+            self.record([fields])
+            self.success({})
+            await future  # Pull All is called, flush queue...
+            self.flush()
+            self.task_queue_handler = self.loop.create_task(self._run_task_queue())
+            log_debug("Packed fields '{}'".format(fields))
 
     def on_ack_failure(self):
-        if self.active_run_task:
-            self.active_run_task.cancel()
         self.restart_task_queue()
 
     def on_discard_all(self):
-        if self.active_run_task:
-            self.active_run_task.cancel()
+        self.restart_task_queue()
 
     def on_pull_all(self):
         waiter = self.waiters_popleft()
         waiter.set_result(True)
 
     def on_reset(self):
-        if self.active_run_task:
-            self.active_run_task.cancel()
+        # Check behaviour
+        while not self.queue.empty():
+            self.queue.get_nowait()
+            self.ignored({})
         self.restart_task_queue()
 
     def on_run(self, data):
@@ -105,15 +112,65 @@ class ServerSession(protocol.BoltServerProtocol):
 
     async def run(self, data):
         """Inheriting server protocol must implement this method."""
-        log_warning("""Server received run message {}
-                       Inheriting classes must implement `run`""".format(data))
-        raise NotImplementedError
+        raise NotImplementedError("""Server received run message {}
+                                     Inheriting classes must implement `run`""".format(data))
 
 
 class Server:
-    """Protocol factory class that allows for appropriate shutdown of cons on close"""
-    def __init__(self, loop, protocol_class, **kwargs):
+    """
+    Server class similar to asyncio.Server. Manage protocol instances and perform graceful shutdown.
+    """
+    def __init__(self, loop, **kwargs):
         self._loop = loop
-        self._protocol_class = protocol_class
         self._kwargs = kwargs
-        self._connections = {}
+        self._connections = set()
+        self._server = None
+        self._old_conns = asyncio.Queue()
+        self._cleanup_task = self._loop.create_task(self._do_cleanup())
+
+    @property
+    def sockets(self):
+        if self._server:
+            return self._server.sockets
+
+    async def _do_cleanup(self):
+        try:
+            old_con = await self._old_conns.get()
+            await old_con.wait_closed()
+            log_debug('Closed server connection {}'.format(old_con))
+        except asyncio.CancelledError:
+            pass
+        else:
+            self._cleanup_task = self._loop.create_task(self._do_cleanup())
+
+    def attach_server(self, server):
+        self._server = server
+
+    def add_connection(self, connection):
+        log_debug('Adding connection {}'.format(connection))
+        self._connections.add(connection)
+
+    def remove_connection(self, connection):
+        log_debug('Removing connection {}'.format(connection))
+        if connection in self._connections:
+            self._connections.remove(connection)
+            self._old_conns.put_nowait(connection)
+
+    def close(self):
+        self._cleanup_task.cancel()
+
+    async def wait_closed(self):
+        await self._cleanup_task
+        tasks = []
+        while not self._old_conns.empty():
+            old_con = self._old_conns.get_nowait()
+            log_debug('Closing server connection {}'.format(old_con))
+            tasks.append(self._loop.create_task(old_con.wait_closed()))
+        for con in self._connections:
+            log_debug('Closing server connection {}'.format(con))
+            con.close()
+            tasks.append(self._loop.create_task(con.wait_closed()))
+        await asyncio.gather(*tasks)
+        log_debug('All server connections closed')
+        self._server.close()
+        await self._server.wait_closed()

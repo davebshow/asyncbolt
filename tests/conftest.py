@@ -7,7 +7,7 @@ from asyncbolt.protocol import BoltClientProtocol, BoltServerProtocol
 from asyncbolt.server import ServerSession
 
 
-class EchoBoltServerProtocol(ServerSession):
+class EchoBoltServerSession(ServerSession):
 
     async def run(self, data):
         if data.statement == 'fail':
@@ -64,7 +64,7 @@ def client_server_pair(event_loop, host, port):
 @pytest.fixture(scope='function')
 def echo_client_server_pair(event_loop, host, port):
     # Get server
-    coro = event_loop.create_server(lambda: EchoBoltServerProtocol(event_loop), host, port)
+    coro = event_loop.create_server(lambda: EchoBoltServerSession(event_loop), host, port)
     server = event_loop.run_until_complete(coro)
     # Get client
     coro = event_loop.create_connection(lambda: BoltClientProtocol(event_loop), host, port)
@@ -77,7 +77,7 @@ def echo_client_server_pair(event_loop, host, port):
 
 @pytest.fixture(scope='function')
 def echo_client_session_server_pair(event_loop, host, port):
-    coro = event_loop.create_server(lambda: EchoBoltServerProtocol(event_loop), host, port)
+    coro = event_loop.create_server(lambda: EchoBoltServerSession(event_loop), host, port)
     server = event_loop.run_until_complete(coro)
     # Get client
     uri = 'tcp://{}:{}'.format(host, port)

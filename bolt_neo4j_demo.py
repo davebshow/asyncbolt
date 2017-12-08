@@ -1,6 +1,17 @@
 import asyncio
 import logging
-from asyncbolt import connect
+from asyncbolt import connect, protocol
+
+
+class Neo4jBoltClientProtocol(protocol.BoltClientProtocol):
+
+    def __init__(self, loop, *, username=None, password=None):
+        super().__init__(loop)
+        self.username = username
+        self.password = password
+
+    def get_init_params(self):
+        return 'AsyncBolt/1.0', {"scheme": "basic", "principal": self.username, "credentials": self.password}
 
 
 FORMAT = '%(message)s'
@@ -12,7 +23,9 @@ log_debug = logger.debug
 
 async def go(loop):
     log_debug("\nSimulating the examples from the Bolt documentation...\n")
-    client = await connect('tcp://localhost:7687', loop)
+    client = await connect(
+        'tcp://localhost:7687', loop,
+        protocol_class=Neo4jBoltClientProtocol, username='neo4j', password='password')
     start = loop.time()
     try:
         log_debug("Running a Cypher query...\n")
@@ -44,13 +57,17 @@ async def go(loop):
         async for msg in client.run("EXPLAIN MATCH (n), (m) RETURN n, m", {}, get_eof=True):
             log_debug('Client received message: \n\n{}\n'.format(msg))
 
-        log_debug("Get a node...\n")
+        log_debug("Get somes nodes...\n")
 
-        first = True
+
         async for msg in client.run('MATCH (n) RETURN n'):
-            if first:
-                log_debug('Client received message: \n\n{}\n'.format(msg))
-                first = False
+            log_debug('Client received message: {}'.format(msg))
+
+
+        log_debug("\nReset session...\n")
+
+        msg = await client.reset()
+        log_debug('Client received message: \n\n{}\n'.format(msg))
 
     finally:
         print("Finished in {}".format(loop.time() - start))

@@ -21,16 +21,16 @@ client_response = collections.namedtuple('ClientResponse', ['fields', 'metadata'
 async def connect(uri, loop, *,
                   ssl=None,
                   on_failure=None,
-                  protocol_class=None,
                   max_inflight=1024,
+                  protocol_class=None,
                   **kwargs):
     """
     Connect to the Bolt server and initialize session
     :param str uri:
     :param asyncio.BaseEventLoop loop:
+    :param asyncbolt.ClientProtocol protocol_class:
     :param asyncbolt.messaging.Message on_failure: Either asyncbolt.messaging.Message.ACK_FALIURE
         or asyncbolt.messaging.Message.RESET. Default is RESET
-    :param asyncbolt.ClientProtocol protocol_class:
     :param int max_inflight: Max number run messages in pipeline
     :returns: asyncbolt.client.ClientSession
     """
@@ -41,9 +41,10 @@ async def connect(uri, loop, *,
         protocol_class = BoltClientProtocol
 
     # Create connection to server
-    uri = urlparse(uri)
+    if isinstance(uri, str):
+        uri = urlparse(uri)
     _, protocol = await loop.create_connection(
-        lambda: protocol_class(loop, uri=uri, **kwargs), uri.hostname, uri.port, ssl=ssl)
+        lambda: protocol_class(loop, **kwargs), uri.hostname, uri.port, ssl=ssl)
     await protocol.handshake_waiter
 
     # Initialize session. If successful, return a new client session
@@ -69,13 +70,13 @@ async def connect(uri, loop, *,
     else:
         # Success! Return a new client session!
         log_debug("Client session initialized with server metadata:\n\n{}\n".format(success.metadata))
-        return ClientSession(uri, loop, on_failure, protocol, client_name, auth_token, max_inflight)
+        return ClientSession(uri, loop, protocol, on_failure, client_name, auth_token, max_inflight)
 
 
 class ClientSession:
     """Implement a Bolt client session. Maintains client session state."""
 
-    def __init__(self, uri, loop, on_failure, protocol, client_name, auth_token, max_inflight):
+    def __init__(self, uri, loop, protocol, on_failure, client_name, auth_token, max_inflight):
         self._parsed_uri = uri
         self._loop = loop
         self._on_failure = on_failure
@@ -156,6 +157,15 @@ class ClientSession:
         self._inflight += 2
 
     # TODO RESET SESSION METHOD!
+
+    async def reset(self):
+        if self._inflight > self._max_inflight:
+            raise BoltClientError('Exceeded max number of pipelined messages')
+        self._protocol.reset()
+        self._protocol.flush()
+        success = await self._protocol.read()
+        assert success[0] == Message.SUCCESS
+        return client_response(['Successfully reset sever session'], success[1], True)
 
     def close(self):
         self._protocol.close()
