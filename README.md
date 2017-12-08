@@ -25,7 +25,7 @@ Using the client is easy. The following example uses Neo4j.
 Get the server, unpack, and cd:
 
 ```buildoutcfg
-$ wget dist.neo4j.org/neo4j-community-1.9.9-unix.tar.gz
+$ wget dist.neo4j.org/neo4j-community-3.3.1-unix.tar.gz
 $ tar xvf neo4j-community-3.3.1-unix.tar.gz
 $ cd neo4j-community-3.3.1/
 ```
