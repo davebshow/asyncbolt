@@ -2,8 +2,6 @@ import asyncio
 import collections
 import logging
 
-from urllib.parse import urlparse
-
 from asyncbolt import protocol
 
 
@@ -14,14 +12,10 @@ log_warning = logger.warning
 log_error = logger.error
 
 
-async def create_server(uri, loop, protocol_class, **kwargs):
-    if isinstance(uri, str):
-        uri = urlparse(uri)
-    asyncbolt_server = Server(loop)
-    server = await loop.create_server(
-        lambda: protocol_class(loop, server=asyncbolt_server, **kwargs), uri.hostname, uri.port)
-    asyncbolt_server.attach_server(server)
-    return asyncbolt_server
+async def create_server(loop, protocol_class, host='localhost', port=8888, **kwargs):
+    server = Server(loop, protocol_class, host=host, port=port, **kwargs)
+    await server.start_serving()
+    return server
 
 
 class ServerSession(protocol.BoltServerProtocol):
@@ -120,13 +114,20 @@ class Server:
     """
     Server class similar to asyncio.Server. Manage protocol instances and perform graceful shutdown.
     """
-    def __init__(self, loop, **kwargs):
+    def __init__(self, loop, protocol_class, host='localhost', port=8888, **kwargs):
         self._loop = loop
+        self._protocol_class = protocol_class
+        self._host = host
+        self._port = port
         self._kwargs = kwargs
         self._connections = set()
         self._server = None
         self._old_conns = asyncio.Queue()
         self._cleanup_task = self._loop.create_task(self._do_cleanup())
+
+    async def start_serving(self):
+        self._server = await self._loop.create_server(
+            lambda: self._protocol_class(self._loop, server=self, **self._kwargs), self._host, self._port)
 
     @property
     def sockets(self):
@@ -142,9 +143,6 @@ class Server:
             pass
         else:
             self._cleanup_task = self._loop.create_task(self._do_cleanup())
-
-    def attach_server(self, server):
-        self._server = server
 
     def add_connection(self, connection):
         log_debug('Adding connection {}'.format(connection))

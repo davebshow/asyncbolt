@@ -44,7 +44,7 @@ async def connect(uri, loop, *,
     if isinstance(uri, str):
         uri = urlparse(uri)
     _, protocol = await loop.create_connection(
-        lambda: protocol_class(loop, **kwargs), uri.hostname, uri.port, ssl=ssl)
+        lambda: protocol_class(loop), uri.hostname, uri.port, ssl=ssl)
     await protocol.handshake_waiter
 
     # Initialize session. If successful, return a new client session

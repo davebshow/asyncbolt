@@ -281,7 +281,6 @@ Client received message:
 ClientResponse(fields=['Successfully reset sever session'], metadata={}, eof=True)
 
 Finished in 0.018699501997616608
-
 ```
 
 #### Pipelining
@@ -309,11 +308,3 @@ Done properly, this can result in huge performance gains.
 * CI
 * Docs...? The idea is that need for documentation is minimal...
 * Much, much, more...
-
-*Notes*
-
-- `asyncbolt` does provide decoders for Graph Type structures, as these are expected in Record messages sent by the Neo4j
-server. It does not provide message packing for graph type structures. In the future, these may be added, or
-`asyncbolt.messaging.ENCODERS` may be extended in application code.
-
-
