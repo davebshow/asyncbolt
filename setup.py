@@ -1,14 +1,15 @@
-from setuptools import setup, find_packages
+from setuptools import setup
 
 
 setup(
     name="asyncbolt",
     version="0.0.1",
     license="MIT",
-    author="davebshow",
+    author="David M. Brown",
     author_email="davebshow@gmail.com",
-    description="Bolt protocol for Asyncio",
-    packages=find_packages(exclude=['tests']),
+    description="Bolt client/server protocol for Python asyncio",
+    url='https://github.com/davebshow/asyncbolt',
+    packages=['asyncbolt'],
     extras_require={
         'test': ['pytest', 'pytest-asyncio']},
     classifiers=[

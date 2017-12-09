@@ -1,5 +1,11 @@
 import asyncio
+import logging
+
 import asyncbolt
+
+
+FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+logging.basicConfig(level=logging.DEBUG, format=FORMAT)
 
 
 class EchoServerSession(asyncbolt.ServerSession):

@@ -18,13 +18,13 @@ client_response = collections.namedtuple('ClientResponse', ['fields', 'metadata'
 
 
 async def connect(*,
+                  protocol_class=None,
                   loop=None,
                   host=None,
                   port=None,
                   ssl=None,
                   on_failure=None,
                   max_inflight=1024,
-                  protocol_class=None,
                   **kwargs):
     """
     Connect to the Bolt server and initialize session

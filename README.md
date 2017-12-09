@@ -1,4 +1,4 @@
-# asyncbolt
+# :zap:asyncbolt:zap:
 
 :zap:`asyncbolt`:zap: is an implementation of the Neo4j [Bolt](https://boltprotocol.org/) client/server protocol for Python [asyncio](https://docs.python.org/3/library/asyncio.html).
 
@@ -10,12 +10,12 @@ speaks Bolt), but it isn't a replacement for a full featured Neo4j client.
 
 **WARNING** - *This project is not stable, possible breaking changes or bugs*
 
-## Example use
+## Getting started
 
 Install with pip:
 
 ```
-$ comingsoon
+$ pip install asyncbolt
 ```
 
 ### Basic Example
@@ -75,24 +75,22 @@ print(results)
 ### Client
 
 Using the client is easy. The following shows how to use `asyncbolt.ClientSession` to talk to the [Neo4j](https://neo4j.com/) server.
-This technique can be extended to be used with any server that speaks Bolt.
+This technique can be extended for use with any server that speaks Bolt.
 
 #### Connecting to Neo4j
 
-Get the server, unpack, and cd:
+Get the server, unpack, cd, and fire it up:
 
 ```
 $ wget dist.neo4j.org/neo4j-community-3.3.1-unix.tar.gz
 $ tar xvf neo4j-community-3.3.1-unix.tar.gz
 $ cd neo4j-community-3.3.1/
-```
-
-Fire it up:
-```
 $ bin/neo4j start
 ```
 
-Typically, you will want to do some kind of authentication with the server. `asyncbolt.BoltClientProtocol` doesn't
+##### Authentication
+
+Typically, you will want to authenticate the client with the server. `asyncbolt.BoltClientProtocol` doesn't
 support authentication out of the box, but it is easy to create a subclass that does:
 
 ```python
@@ -112,16 +110,15 @@ class Neo4jBoltClientProtocol(asyncbolt.BoltClientProtocol):
 ```
 
 The methods `__init__` and `get_init_params` are basically the only methods inheriting protocols need implement, as
-authorization will typically be the only difference between server implementations, at least from the client's perspective.
+authentication will typically be the only difference between server implementations, at least from the client's perspective.
 
-##### Submit a query
+##### Connect and submit a query
 
 Use `asyncbolt.connect` to create an `asyncbolt.ClientSession` instance, passing the custom protocol class and its
 kwargs. Then use the run method to submit Cypher to the server:
 
 ```python
 loop = asyncio.get_event_loop()
-
 client_session = await asyncbolt.connect(loop=loop,
                                          host='localhost',
                                          port=8888,
@@ -167,7 +164,7 @@ Clone this repo, cd, and run:
 ```buildoutcfg
 $ git clone https://github.com/davebshow/asyncbolt.git
 $ cd asyncbolt
-$ python bolt_neo4j_demo.py
+$ python bolt_neo4j_demo.py -u myusername -p mypassword
 ```
 
 This script sets logging to debug and produces the following output:
@@ -373,9 +370,6 @@ Unlike `asyncbolt.ClientSession`, the `asyncbolt.ServerSession` class can never 
 implement a subclass of `asyncbolt.ServerSession` with the method `run`, which can be a coroutine or a regular function.
 Optionally, inheriting classes can also implement the `asyncbolt.ServerSession.verify_auth_token` method. 
 
-Users will almost never need to inherit directly from `asyncbolt.BoltServerProtocol`, and therefore it will not be discussed here.
-If you are interested, `asyncbolt.ServerSession` inherits directly from the protocol, using `asyncio` objects to implement
-the Bolt session logic.
 
 ```python
 class AwesomeServerSession(asyncbolt.ServerSession):
@@ -387,10 +381,13 @@ class AwesomeServerSession(asyncbolt.ServerSession):
         # ...do auth...
 ```
 
+Users will almost never need to inherit directly from `asyncbolt.BoltServerProtocol`, and therefore it will not be discussed here.
+If you are interested, `asyncbolt.ServerSession` inherits directly from the protocol, using `asyncio` objects to implement
+the Bolt session logic.
 
 
 ## TODOs
-`asyncbolt` needs a lot of work. Contributions are welcome.
+:zap:`asyncbolt`:zap: needs a lot of work. Contributions are welcome.
 
 * Tests, tests, tests (Neo4j, *buffers*, etc., etc.)
 * Improve buffer implementation/testing
