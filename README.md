@@ -25,23 +25,19 @@ receives a RUN message from the client:
 
 ```python
 import asyncio
-import logging
-
 import asyncbolt
 
-logging.basicConfig(level=logging.DEBUG)
 
 class EchoServerSession(asyncbolt.ServerSession):
     """This is a descendant of asyncio.Protocol/asyncbolt.BoltServerProtocol"""
+
     def run(self, statement, parameters):
         return {'statement': statement, 'parameters': parameters}
 
 
 # The rest is pretty similar to asyncio...
-# Note that the first arg of create_server is a protocol class, not a factory
-# it will be called with any additional kwargs passed to to create_server
 loop = asyncio.get_event_loop()
-coro = asyncbolt.create_server(EchoServerSession, loop=loop, host='localhost', port=8888, ssl=None)
+coro = asyncbolt.create_server(EchoServerSession, loop=loop)
 server = loop.run_until_complete(coro)
 
 # Serve requests until Ctrl+C is pressed
