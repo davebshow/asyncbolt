@@ -121,7 +121,7 @@ kwargs. Then use the run method to submit Cypher to the server:
 loop = asyncio.get_event_loop()
 client_session = await asyncbolt.connect(loop=loop,
                                          host='localhost',
-                                         port=8888,
+                                         port=7687,
                                          protocol_class=Neo4jBoltClientProtocol,
                                          username='neo4j', password='password')
     
