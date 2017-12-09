@@ -205,7 +205,7 @@ class BoltServerProtocol(BoltProtocol):
 class BoltClientProtocol(BoltProtocol):
     """Implement the Bolt protocol for client"""
 
-    def __init__(self, loop):
+    def __init__(self, loop, **kwargs):
         super().__init__(loop)
         self.waiter = asyncio.Future(loop=self.loop)
         self.handshake_waiter = asyncio.Future(loop=self.loop)

@@ -9,10 +9,10 @@ from asyncbolt.server import ServerSession
 
 class EchoBoltServerSession(ServerSession):
 
-    async def run(self, data):
-        if data.statement == 'fail':
+    async def run(self, statement, parameters):
+        if statement == 'fail':
             raise RuntimeError('Server received bad statement')
-        return data.statement
+        return statement
 
 
 def pytest_addoption(parser):
@@ -80,8 +80,7 @@ def echo_client_session_server_pair(event_loop, host, port):
     coro = event_loop.create_server(lambda: EchoBoltServerSession(event_loop), host, port)
     server = event_loop.run_until_complete(coro)
     # Get client
-    uri = 'tcp://{}:{}'.format(host, port)
-    client_session = event_loop.run_until_complete(connect(uri, event_loop))
+    client_session = event_loop.run_until_complete(connect(loop=event_loop, host=host, port=port))
     yield client_session, server
     client_session.close()
     server.close()

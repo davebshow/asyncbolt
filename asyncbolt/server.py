@@ -12,8 +12,20 @@ log_warning = logger.warning
 log_error = logger.error
 
 
-async def create_server(loop, protocol_class, host='localhost', port=8888, **kwargs):
-    server = Server(loop, protocol_class, host=host, port=port, **kwargs)
+async def create_server(protocol_class,
+                        *,
+                        loop=None,
+                        host=None,
+                        port=None,
+                        ssl=None,
+                        **kwargs):
+    if loop is None:
+        loop = asyncio.get_event_loop()
+    if host is None:
+        host = '127.0.0.1'
+    if port is None:
+        port = 8888
+    server = Server(protocol_class, loop, host, port, ssl, **kwargs)
     await server.start_serving()
     return server
 
@@ -125,11 +137,12 @@ class Server:
     """
     Server class similar to asyncio.Server. Manage protocol instances and perform graceful shutdown.
     """
-    def __init__(self, loop, protocol_class, host='localhost', port=8888, **kwargs):
+    def __init__(self, protocol_class, loop, host, port, ssl, **kwargs):
         self._loop = loop
         self._protocol_class = protocol_class
         self._host = host
         self._port = port
+        self._ssl = ssl
         self._kwargs = kwargs
         self._connections = set()
         self._server = None
@@ -138,7 +151,8 @@ class Server:
 
     async def start_serving(self):
         self._server = await self._loop.create_server(
-            lambda: self._protocol_class(self._loop, server=self, **self._kwargs), self._host, self._port)
+            lambda: self._protocol_class(self._loop, server=self, **self._kwargs),
+            host=self._host, port=self._port, ssl=self._ssl)
 
     @property
     def sockets(self):

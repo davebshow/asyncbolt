@@ -3,7 +3,7 @@ import asyncbolt
 
 
 async def echo(loop):
-    client_session = await asyncbolt.connect('tcp://localhost:8888', loop)
+    client_session = await asyncbolt.connect(loop=loop, host='localhost', port=8888)
     results = []
     async for msg in client_session.run('Hello world', {}, get_eof=True):
         results.append(msg)

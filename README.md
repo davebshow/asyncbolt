@@ -1,9 +1,9 @@
 # asyncbolt
 
-:zap:`asyncbolt`:zap: is an implementation of the Neo4j [Bolt](https://boltprotocol.org/) client/server protocol for Python [Asyncio](https://docs.python.org/3/library/asyncio.html).
+:zap:`asyncbolt`:zap: is an implementation of the Neo4j [Bolt](https://boltprotocol.org/) client/server protocol for Python [asyncio](https://docs.python.org/3/library/asyncio.html).
 
 The `asyncbolt.session.ClientSession` object aims to be fully compatible with [Neo4j](https://neo4j.com/) (or any other server that
-speaks Bolt), but it won't provide a fully featured Neo4j client.
+speaks Bolt), but it isn't a replacement for a full featured Neo4j client.
 
 - Python >= 3.6
 - 0 dependencies
@@ -20,23 +20,28 @@ $ comingsoon
 
 ### Basic Example
 
-Set up the server by subclassing `asyncbolt.ServerSession` and implementing the method run. Run is called when the server
+Set up the server by subclassing `asyncbolt.ServerSession` and implementing the method `run`. Run is called when the server
 receives a RUN message from the client:
 
 ```python
 import asyncio
+import logging
+
 import asyncbolt
 
+logging.basicConfig(level=logging.DEBUG)
 
 class EchoServerSession(asyncbolt.ServerSession):
-    """asyncbolt.ServerSession is a descendant of asyncio.Protocol/asyncbolt.BoltServerProtocol"""
+    """This is a descendant of asyncio.Protocol/asyncbolt.BoltServerProtocol"""
     def run(self, statement, parameters):
         return {'statement': statement, 'parameters': parameters}
 
 
 # The rest is pretty similar to asyncio...
+# Note that the first arg of create_server is a protocol class, not a factory
+# it will be called with any additional kwargs passed to to create_server
 loop = asyncio.get_event_loop()
-coro = asyncbolt.create_server(loop, host='localhost', port='8888', protocol_class=EchoServerSession)
+coro = asyncbolt.create_server(EchoServerSession, loop=loop, host='localhost', port=8888, ssl=None)
 server = loop.run_until_complete(coro)
 
 # Serve requests until Ctrl+C is pressed
@@ -58,7 +63,7 @@ import asyncbolt
 
 
 async def echo(loop):
-    client_session = await asyncbolt.connect('tcp://localhost:8888', loop)
+    client_session = await asyncbolt.connect(loop=loop, host='localhost', port=8888, ssl=None)
     results = []
     async for msg in client_session.run('Hello world', {}, get_eof=True):
         results.append(msg)
@@ -110,13 +115,15 @@ class Neo4jBoltClientProtocol(asyncbolt.BoltClientProtocol):
 The methods `__init__` and `get_init_params` are basically the only methods inheriting protocols need implement, as
 authorization will typically be the only difference between server implementations, at least from the client's perspective.
 
-Use `asyncbolt.connect` to create an `asyncbolt.ClientSession` instance, passing the custom protocol class, and its
+Use `asyncbolt.connect` to create an `asyncbolt.ClientSession` instance, passing the custom protocol class and its
 kwargs:
 
 ```python
 loop = asyncio.get_event_loop()
 
-client_session = await asyncbolt.connect('tcp://localhost:7687', loop,
+client_session = await asyncbolt.connect(loop=loop,
+                                         host='localhost',
+                                         port=8888,
                                          protocol_class=Neo4jBoltClientProtocol,
                                          username='neo4j', password='password')
     
@@ -125,7 +132,7 @@ async for msg in client_session.run("RETURN 1 AS num", {}):
 # ClientResponse(fields=[1], metadata={'result_available_after': 0, 'fields': ['num']}, eof=False)
 ```
 
-If you are interested in extra metadata sent by the Neo4j server be sure to set the `get_eof` kwarg to `True` when
+If you are interested in extra metadata sent by the Neo4j server, be sure to set the `get_eof` kwarg to `True` when
 calling the `run` method. For example, when you want to use query profiling/explanation:
 
 ```python
@@ -148,7 +155,7 @@ async for msg in client_session.run("EXPLAIN RETURN 1 AS num",  {}, get_eof=True
 #    eof=True)
 ```
 
-The `asyncbolt.ClientSession` object appears to communicate fluently with the Neo4j Server. The script `bolt_neo4_demo.py`
+`asyncbolt.ClientSession` appears to communicate fluently with the Neo4j Server. The script `bolt_neo4_demo.py`
 implements some of the examples from the Bolt protocol homepage. It can be run as follows.
 
 Clone this repo, cd, and run:
@@ -161,7 +168,7 @@ $ python bolt_neo4j_demo.py
 This script sets logging to debug and produces the following output:
 
 ```txt
-Simulating the examples from the Bolt documentation...
+Running the examples from the Bolt documentation...
 
 Connection made to: ('127.0.0.1', 7687)
 Sending handshake with version info: b'\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
@@ -357,11 +364,11 @@ await client_session.reset()
 ```
 
 ## Server
-Unlike `asyncbolt.ClientSession` the `asyncbolt.ServerSession` class can never be used out of the box. Users must
-implement a subclass of `asyncbolt.ServerSession` with the method run, which can be a coroutine or a regular function.
+Unlike `asyncbolt.ClientSession`, the `asyncbolt.ServerSession` class can never be used out of the box. Users must
+implement a subclass of `asyncbolt.ServerSession` with the method `run`, which can be a coroutine or a regular function.
 Optionally, inheriting classes can also implement the `asyncbolt.ServerSession.verify_auth_token` method. 
 
-Users will almost never need to inherit directly from `asyncbolt.BoltServerProtocol` and therefore will not be discussed here.
+Users will almost never need to inherit directly from `asyncbolt.BoltServerProtocol`, and therefore it will not be discussed here.
 If you are interested, `asyncbolt.ServerSession` inherits directly from the protocol, using `asyncio` objects to implement
 the Bolt session logic.
 
@@ -378,7 +385,7 @@ class AwesomeServerSession(asyncbolt.ServerSession):
 
 
 ## TODOs
-'asyncbolt' needs a lot of work. Contributions are welcome.
+`asyncbolt` needs a lot of work. Contributions are welcome.
 
 * Tests, tests, tests (Neo4j, *buffers*, etc., etc.)
 * Improve buffer implementation/testing

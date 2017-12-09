@@ -13,7 +13,7 @@ class EchoServerSession(asyncbolt.ServerSession):
 
 # The rest is pretty similar to asyncio...
 loop = asyncio.get_event_loop()
-coro = asyncbolt.create_server(loop, host='localhost', port='8888', protocol_class=EchoServerSession)
+coro = asyncbolt.create_server(EchoServerSession, loop=loop)
 server = loop.run_until_complete(coro)
 
 # Serve requests until Ctrl+C is pressed

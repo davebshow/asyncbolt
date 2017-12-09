@@ -6,7 +6,7 @@ from asyncbolt import connect, protocol
 class Neo4jBoltClientProtocol(protocol.BoltClientProtocol):
 
     def __init__(self, loop, *, username=None, password=None):
-        super().__init__(loop)
+        super().__init__(loop=loop)
         self.username = username
         self.password = password
 
@@ -22,9 +22,9 @@ log_debug = logger.debug
 
 
 async def go(loop):
-    log_debug("\nSimulating the examples from the Bolt documentation...\n")
+    log_debug("\nRunning the examples from the Bolt documentation...\n")
     client = await connect(
-        'tcp://localhost:7687', loop,
+        loop=loop, host='localhost', port=7687,
         protocol_class=Neo4jBoltClientProtocol, username='neo4j', password='password')
     start = loop.time()
     try:
