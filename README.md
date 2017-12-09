@@ -157,7 +157,7 @@ async for msg in client_session.run("EXPLAIN RETURN 1 AS num",  {}, get_eof=True
 #    eof=True)
 ```
 
-##### Run the Neo4j server Bolt protocol server
+##### Run the Neo4j server Bolt protocol server test dialogue
 
 `asyncbolt.ClientSession` appears to communicate fluently with the Neo4j Server. The script `bolt_neo4_demo.py`
 implements some of the examples from the Bolt protocol homepage. It can be run as follows.
