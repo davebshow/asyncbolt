@@ -76,6 +76,8 @@ print(results)
 Using the client is easy. The following shows how to use `asyncbolt.ClientSession` to talk to the [Neo4j](https://neo4j.com/) server.
 This technique can be extended to be used with any server that speaks Bolt.
 
+#### Connecting to Neo4j
+
 Get the server, unpack, and cd:
 
 ```
@@ -111,8 +113,10 @@ class Neo4jBoltClientProtocol(asyncbolt.BoltClientProtocol):
 The methods `__init__` and `get_init_params` are basically the only methods inheriting protocols need implement, as
 authorization will typically be the only difference between server implementations, at least from the client's perspective.
 
+##### Submit a query
+
 Use `asyncbolt.connect` to create an `asyncbolt.ClientSession` instance, passing the custom protocol class and its
-kwargs:
+kwargs. Then use the run method to submit Cypher to the server:
 
 ```python
 loop = asyncio.get_event_loop()
@@ -127,6 +131,8 @@ async for msg in client_session.run("RETURN 1 AS num", {}):
     print(msg)
 # ClientResponse(fields=[1], metadata={'result_available_after': 0, 'fields': ['num']}, eof=False)
 ```
+
+##### Get metadata
 
 If you are interested in extra metadata sent by the Neo4j server, be sure to set the `get_eof` kwarg to `True` when
 calling the `run` method. For example, when you want to use query profiling/explanation:
@@ -150,6 +156,8 @@ async for msg in client_session.run("EXPLAIN RETURN 1 AS num",  {}, get_eof=True
 #                      'identifiers': ['num'], 'operatorType': 'ProduceResults'}},
 #    eof=True)
 ```
+
+##### Run the Neo4j server Bolt protocol server
 
 `asyncbolt.ClientSession` appears to communicate fluently with the Neo4j Server. The script `bolt_neo4_demo.py`
 implements some of the examples from the Bolt protocol homepage. It can be run as follows.
