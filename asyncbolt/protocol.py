@@ -89,7 +89,7 @@ class BoltServerProtocol(BoltProtocol):
                 self.read_buffer.feed_data(data)
                 result = messaging.unpack_message(self.read_buffer)
                 assert result.signature == messaging.Message.INIT
-                self.verify_auth_token(result.auth_token)
+                self.on_init(result)
                 self.state = ServerProtocolState.PROTOCOL_READY
                 log_debug("Server session initialized with auth token '{}'".format(result.auth_token))
                 metadata = self.get_server_metadata()
@@ -118,7 +118,7 @@ class BoltServerProtocol(BoltProtocol):
         """Inheriting server protocol should implement this method"""
         return {"server": "AsyncBolt/1.0"}
 
-    def verify_auth_token(self, _):
+    def on_init(self, _):
         """Inheriting server protocol should implement this method"""
 
     # Hooks for custom behavior in inheriting classes

@@ -2,40 +2,93 @@
 
 :zap:`asyncbolt`:zap: is an implementation of the Neo4j [Bolt](https://boltprotocol.org/) client/server protocol for Python [Asyncio](https://docs.python.org/3/library/asyncio.html).
 
-The `asyncbolt.session.ClientSession` object aims to be fully compatible with Neo4j (or any other server that
+The `asyncbolt.session.ClientSession` object aims to be fully compatible with [Neo4j](https://neo4j.com/) (or any other server that
 speaks Bolt), but it won't provide a fully featured Neo4j client.
 
 - Python >= 3.6
 - 0 dependencies
 
+**WARNING** - *This project is not stable, possible breaking changes or bugs*
+
 ## Example use
 
 Install with pip:
 
-```buildoutcfg
+```
 $ comingsoon
+```
+
+### Basic Example
+
+Set up the server by subclassing `asyncbolt.ServerSession` and implementing the method run. Run is called when the server
+receives a RUN message from the client:
+
+```python
+import asyncio
+import asyncbolt
+
+
+class EchoServerSession(asyncbolt.ServerSession):
+    """asyncbolt.ServerSession is a descendant of asyncio.Protocol/asyncbolt.BoltServerProtocol"""
+    def run(self, statement, parameters):
+        return {'statement': statement, 'parameters': parameters}
+
+
+# The rest is pretty similar to asyncio...
+loop = asyncio.get_event_loop()
+coro = asyncbolt.create_server(loop, host='localhost', port='8888', protocol_class=EchoServerSession)
+server = loop.run_until_complete(coro)
+
+# Serve requests until Ctrl+C is pressed
+print('Serving on {}'.format(server.sockets[0].getsockname()))
+try:
+    loop.run_forever()
+except KeyboardInterrupt:
+    pass
+server.close()
+loop.run_until_complete(server.wait_closed())
+loop.close()
+```
+
+Use an `asyncbolt.ClientSession` to talk to the server:
+
+```python
+import asyncio
+import asyncbolt
+
+
+async def echo(loop):
+    client_session = await asyncbolt.connect('tcp://localhost:8888', loop)
+    results = []
+    async for msg in client_session.run('Hello world', {}, get_eof=True):
+        results.append(msg)
+    return results
+
+
+loop = asyncio.get_event_loop()
+results = loop.run_until_complete(echo(loop))
+print(results)
 ```
 
 ### Client
 
-#### Basics
-
-Using the client is easy. The following example uses Neo4j.
+Using the client is easy. The following shows how to use `asyncbolt.ClientSession` to talk to the [Neo4j](https://neo4j.com/) server.
+This technique can be extended to be used with any server that speaks Bolt.
 
 Get the server, unpack, and cd:
 
-```buildoutcfg
+```
 $ wget dist.neo4j.org/neo4j-community-3.3.1-unix.tar.gz
 $ tar xvf neo4j-community-3.3.1-unix.tar.gz
 $ cd neo4j-community-3.3.1/
 ```
 
 Fire it up:
-```buildoutcfg
+```
 $ bin/neo4j start
 ```
 
-Typically, you will want to use some kind of authorization with the server. `asyncbolt.BoltClientProtocol` doesn't
+Typically, you will want to do some kind of authentication with the server. `asyncbolt.BoltClientProtocol` doesn't
 support authentication out of the box, but it is easy to create a subclass that does:
 
 ```python
@@ -63,11 +116,11 @@ kwargs:
 ```python
 loop = asyncio.get_event_loop()
 
-client = await asyncbolt.connect('tcp://localhost:7687', loop,
-                                 protocol_class=Neo4jBoltClientProtocol,
-                                 username='neo4j', password='password')
+client_session = await asyncbolt.connect('tcp://localhost:7687', loop,
+                                         protocol_class=Neo4jBoltClientProtocol,
+                                         username='neo4j', password='password')
     
-async for msg in client.run("RETURN 1 AS num", {}):
+async for msg in client_session.run("RETURN 1 AS num", {}):
     print(msg)
 # ClientResponse(fields=[1], metadata={'result_available_after': 0, 'fields': ['num']}, eof=False)
 ```
@@ -76,7 +129,7 @@ If you are interested in extra metadata sent by the Neo4j server be sure to set 
 calling the `run` method. For example, when you want to use query profiling/explanation:
 
 ```python
-async for msg in client.run("EXPLAIN RETURN 1 AS num",  {}, get_eof=True):
+async for msg in client_session.run("EXPLAIN RETURN 1 AS num",  {}, get_eof=True):
     print(msg)
 #ClientResponse(
 #    fields=None,
@@ -100,7 +153,7 @@ implements some of the examples from the Bolt protocol homepage. It can be run a
 
 Clone this repo, cd, and run:
 ```buildoutcfg
-$ git clone
+$ git clone https://github.com/davebshow/asyncbolt.git
 $ cd asyncbolt
 $ python bolt_neo4j_demo.py
 ```
@@ -287,15 +340,40 @@ Finished in 0.018699501997616608
 As you can see, `asyncbolt` using pipelining by default. Users can also choose to pipeline multiple message together.
 Done properly, this can result in huge performance gains.
 
-#### Reset
+```python
+# Write several messages to the buffer
+client_session.pipeline("RETURN 1 AS num", {})
+client_session.pipeline("RETURN 1 AS num", {})
+client_session.pipeline("RETURN 1 AS num", {})
+# Write one more and send them to the server with `run`
+async for msg in client_session.run("RETURN 1 AS num", {}):
+    print(msg)
+```
 
-#### Custom Client Protocols (subclassing `asyncbolt.BoltClientProtocol`)
+#### Reset
+Reset the server to a clean state:
+```python
+await client_session.reset()
+```
 
 ## Server
+Unlike `asyncbolt.ClientSession` the `asyncbolt.ServerSession` class can never be used out of the box. Users must
+implement a subclass of `asyncbolt.ServerSession` with the method run, which can be a coroutine or a regular function.
+Optionally, inheriting classes can also implement the `asyncbolt.ServerSession.verify_auth_token` method. 
 
-### Subclassing `asyncbolt.ServerSession`
+Users will almost never need to inherit directly from `asyncbolt.BoltServerProtocol` and therefore will not be discussed here.
+If you are interested, `asyncbolt.ServerSession` inherits directly from the protocol, using `asyncio` objects to implement
+the Bolt session logic.
 
-### Subclassing `asyncbolt.BoltServerProtocol`
+```python
+class AwesomeServerSession(asyncbolt.ServerSession):
+    """asyncbolt.ServerSession is a descendant of asyncio.Protocol/asyncbolt.BoltServerProtocol"""
+    async def run(self, statement, parameters):
+        # ...do something awesome here... 
+        
+    def verify_auth_token(self, auth_token):
+        # ...do auth...
+```
 
 
 
@@ -304,7 +382,11 @@ Done properly, this can result in huge performance gains.
 
 * Tests, tests, tests (Neo4j, *buffers*, etc., etc.)
 * Improve buffer implementation/testing
+* ServerSession needs some work
+* Set up for upcoming versions of Bolt
 * Profiling and optimization (Cython/C extensions)
-* CI
-* Docs...? The idea is that need for documentation is minimal...
-* Much, much, more...
+* Add CI
+* Improve docstrings and generate API docs.
+* Improve everything
+
+

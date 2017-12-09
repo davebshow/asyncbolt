@@ -24,7 +24,7 @@ class ServerSession(protocol.BoltServerProtocol):
     def __init__(self, loop, **kwargs):
         super().__init__(loop)
         self.server = kwargs.get('server')  # I want to be managed!
-        self.queue = asyncio.Queue()
+        self.task_queue = asyncio.Queue()
         self.task_queue_handler = self.loop.create_task(self._run_task_queue())
         self.waiters = collections.deque()
         self.waiters_append = self.waiters.append
@@ -58,29 +58,34 @@ class ServerSession(protocol.BoltServerProtocol):
 
     async def _run_task_queue(self):
         try:
-            task, future = await self.queue.get()
-            fields = await task
+            try:
+                task, future = await self.task_queue.get()
+                start_time = self.loop.time()
+                fields = task
+                if asyncio.iscoroutine(fields):
+                    fields = await fields
+            except Exception as e:
+                self.state = protocol.ServerProtocolState.PROTOCOL_FAILED
+                self.failure({})
+                try:
+                    # TODO should have a timeout here
+                    # This is a bit weird
+                    await future
+                    self.ignored({})
+                except:
+                    pass
+                self.flush()
+            else:
+                self.success({'result_available_after': self.loop.time() - start_time})
+                self.record([fields])
+
+                await future  # Pull All is called, flush queue...
+                self.success({'result_consumed_after': self.loop.time() - start_time})
+                self.flush()
+                self.task_queue_handler = self.loop.create_task(self._run_task_queue())
+                log_debug("Packed fields '{}'".format(fields))
         except asyncio.CancelledError:
             pass
-        except Exception as e:
-            self.state = protocol.ServerProtocolState.PROTOCOL_FAILED
-            self.failure({})
-            try:
-                # TODO should have a timeout here
-                # This is a bit weird
-                await future
-                self.ignored({})
-            except:
-                pass
-            self.flush()
-        else:
-            self.success({})
-            self.record([fields])
-            self.success({})
-            await future  # Pull All is called, flush queue...
-            self.flush()
-            self.task_queue_handler = self.loop.create_task(self._run_task_queue())
-            log_debug("Packed fields '{}'".format(fields))
 
     def on_ack_failure(self):
         self.restart_task_queue()
@@ -88,26 +93,32 @@ class ServerSession(protocol.BoltServerProtocol):
     def on_discard_all(self):
         self.restart_task_queue()
 
+    def on_init(self, auth_token):
+        self.verify_auth_token(auth_token)
+
     def on_pull_all(self):
         waiter = self.waiters_popleft()
         waiter.set_result(True)
 
     def on_reset(self):
         # Check behaviour
-        while not self.queue.empty():
-            self.queue.get_nowait()
+        while not self.task_queue.empty():
+            self.task_queue.get_nowait()
             self.ignored({})
         self.restart_task_queue()
 
     def on_run(self, data):
         future = asyncio.Future(loop=self.loop)
         self.waiters_append(future)
-        self.queue.put_nowait((self.run(data), future))
+        self.task_queue.put_nowait((self.run(data.statement, data.parameters), future))
 
-    async def run(self, data):
+    async def run(self, statement, parameters):
         """Inheriting server protocol must implement this method."""
         raise NotImplementedError("""Server received run message {}
                                      Inheriting classes must implement `run`""".format(data))
+
+    def verify_auth_token(self, auth_token):
+        """Inheriting server protocol may implement this method"""
 
 
 class Server:
