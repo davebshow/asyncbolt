@@ -4,10 +4,10 @@ import pytest
 
 from asyncbolt.client import connect
 from asyncbolt.protocol import BoltClientProtocol, BoltServerProtocol
-from asyncbolt.server import ServerSession
+from asyncbolt.server import ServerSession, create_server
 
 
-class EchoBoltServerSession(ServerSession):
+class EchoServerSession(ServerSession):
 
     async def run(self, statement, parameters):
         if statement == 'fail':
@@ -40,7 +40,7 @@ def client(event_loop, host, port):
 
 @pytest.fixture(scope='function')
 def server(event_loop, host, port):
-    coro = event_loop.create_server(lambda: BoltServerProtocol(event_loop), host, port)
+    coro = create_server(EchoServerSession, loop=event_loop, host=host, port=port, ssl=None)
     server = event_loop.run_until_complete(coro)
     yield server
     server.close()
@@ -50,38 +50,38 @@ def server(event_loop, host, port):
 @pytest.fixture(scope='function')
 def client_server_pair(event_loop, host, port):
     # Get server
-    coro = event_loop.create_server(lambda: BoltServerProtocol(event_loop), host, port)
+    coro = create_server(EchoServerSession, loop=event_loop, host=host, port=port, ssl=None)
     server = event_loop.run_until_complete(coro)
     # Get client
     coro = event_loop.create_connection(lambda: BoltClientProtocol(event_loop), host, port)
     _, protocol = event_loop.run_until_complete(coro)
     yield protocol, server
-    protocol.close()
     server.close()
     event_loop.run_until_complete(server.wait_closed())
+    protocol.close()
 
 
 @pytest.fixture(scope='function')
 def echo_client_server_pair(event_loop, host, port):
     # Get server
-    coro = event_loop.create_server(lambda: EchoBoltServerSession(event_loop), host, port)
+    coro = create_server(EchoServerSession, loop=event_loop, host=host, port=port, ssl=None)
     server = event_loop.run_until_complete(coro)
-    # Get client
+    # Get clientc
     coro = event_loop.create_connection(lambda: BoltClientProtocol(event_loop), host, port)
     _, protocol = event_loop.run_until_complete(coro)
     yield protocol, server
-    protocol.close()
     server.close()
     event_loop.run_until_complete(server.wait_closed())
+    protocol.close()
 
 
 @pytest.fixture(scope='function')
 def echo_client_session_server_pair(event_loop, host, port):
-    coro = event_loop.create_server(lambda: EchoBoltServerSession(event_loop), host, port)
+    coro = create_server(EchoServerSession, loop=event_loop, host=host, port=port, ssl=None)
     server = event_loop.run_until_complete(coro)
     # Get client
     client_session = event_loop.run_until_complete(connect(loop=event_loop, host=host, port=port))
     yield client_session, server
-    client_session.close()
     server.close()
     event_loop.run_until_complete(server.wait_closed())
+    client_session.close()
