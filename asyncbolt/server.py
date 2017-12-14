@@ -119,10 +119,10 @@ class ServerSession(protocol.BoltServerProtocol):
             self.ignored({})
         self.restart_task_queue()
 
-    def on_run(self, data):
+    def on_run(self, statement, parameters):
         future = asyncio.Future(loop=self.loop)
         self.waiters_append(future)
-        self.task_queue.put_nowait((self.run(data.statement, data.parameters), future))
+        self.task_queue.put_nowait((self.run(statement, parameters), future))
 
     async def run(self, statement, parameters):
         """Inheriting server protocol must implement this method."""
@@ -135,7 +135,8 @@ class ServerSession(protocol.BoltServerProtocol):
 
 class Server:
     """
-    Server class similar to asyncio.Server. Manage protocol instances and perform graceful shutdown.
+    Server with same API asyncio.Server. Manage protocol instances and perform graceful shutdown.
+    Should not be instantiated directly, use `asyncbolt.create_server`
     """
     def __init__(self, protocol_class, loop, host, port, ssl, **kwargs):
         self._loop = loop

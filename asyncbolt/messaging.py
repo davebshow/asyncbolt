@@ -80,7 +80,7 @@ pack_double = struct.Struct('>d').pack
 unpack_double = struct.Struct('>d').unpack
 
 
-#Marker enumerations
+# Marker enumerations
 class Boolean(IntEnum):
     TRUE = 0xC3
     FALSE = 0xC2
@@ -181,13 +181,13 @@ class GraphStructure(IntEnum):
 
 
 # Serialize messages as structs (bytes objects)
-def serialize_message(marker, *, buf=None, params=None, max_content_len=8192):
+def serialize_message(signature, *, buf=None, params=None, max_chunk_size=8192):
     """Take a marker and params and return a chunked Bolt message"""
     if not params:
         params = ()
     if not buf:
-        buf = buffer.ChunkedWriteBuffer(max_content_len)
-    buf = pack_structure(marker, buf, params)
+        buf = buffer.ChunkedWriteBuffer(max_chunk_size)
+    buf = pack_structure(signature, buf, params)
     buf.write_eof()
     return buf
 
@@ -311,9 +311,6 @@ def pack(val, buf):
     except KeyError:
         raise ProtocolError("Unknown data type '{}' for value: {}".format(type(val), val))
     return encode(val, buf)
-
-
-
 
 
 def unpack(buf):
@@ -467,8 +464,8 @@ SERIALIZERS = {
     int: pack_int,
     dict: pack_map,
     list: pack_list,
-    OrderedDict: pack_map
-}  # this is for testing
+    OrderedDict: pack_map  # this is for testing
+}
 
 
 STRUCTURE_SIGNATURE_MAP = {
