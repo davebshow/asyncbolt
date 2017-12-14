@@ -12,7 +12,7 @@
 
 **_Python>=3.6_**
 
-**WARNING** - *This project is not stable, possible breaking changes or bugs*
+**WARNING** - *This project is in early stages of development--breaking changes and bugs coming soon*
 
 ## Getting started
 
