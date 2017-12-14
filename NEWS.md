@@ -13,3 +13,17 @@
 *12/09/2017*
 
 * :boom:Initial release!:boom:
+
+
+            elif self.state == ServerProtocolState.PROTOCOL_UNINITIALIZED:
+                if data.signature == messaging.Message.INIT:
+                    self.on_init(data.auth_token)
+                    self.state = ServerProtocolState.PROTOCOL_READY
+                    log_debug("Server session initialized with auth token '{}'".format(data.auth_token))
+                    metadata = self.get_server_metadata()
+                    self.success(metadata)
+                    self.flush()
+                else:
+                    self.state = ServerProtocolState.PROTOCOL_FAILED
+                    self.failure({})
+                    self.flush()

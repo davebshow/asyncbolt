@@ -5,7 +5,7 @@ import logging
 
 from asyncbolt.protocol import BoltClientProtocol
 from asyncbolt.exception import ProtocolError, BoltClientError, ServerFailedError, ServerIgnoredError
-from asyncbolt.messaging import Message, pack_message
+from asyncbolt.messaging import Message, serialize_message
 
 logger = logging.getLogger(__name__)
 log_debug = logger.debug
@@ -118,7 +118,7 @@ class ClientSession:
             except (ServerFailedError, AssertionError) as e:
                 # Failed run. Send ack and read ignored messages until server succeeds with reset
                 self._inflight -= 1
-                pack_message(self._on_failure, buf=self._protocol.write_buffer)
+                serialize_message(self._on_failure, buf=self._protocol.write_buffer)
                 self._protocol.flush()
                 while True:
                     try:

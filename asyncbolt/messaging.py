@@ -29,7 +29,7 @@ unbound_relationship = collections.namedtuple(
     'UnboundRelationship', ['signature', 'relIdentity', 'type', 'properties'])
 
 # Handshake
-# constantse
+# constants
 MAGIC = struct.pack('>BBBB', 0x60, 0x60, 0xB0, 0x17)
 V1 = struct.pack('>I', 0x01)
 NULL_V = struct.pack('>I', 0x00)
@@ -180,32 +180,15 @@ class GraphStructure(IntEnum):
     UNBOUND_RELATIONSHIP = 0x72
 
 
-SUMMARY_MESSAGES = [Message.FAILURE, Message.SUCCESS, Message.IGNORED]
-
-
-structure_signature_map = {
-    Message.INIT: (init, 2),
-    Message.RECORD: (detail, 1),
-    Message.FAILURE: (summary, 1),
-    Message.SUCCESS: (summary, 1),
-    Message.IGNORED: (summary, 1),
-    Message.RUN: (run, 2),
-    GraphStructure.NODE: (node, 3),
-    GraphStructure.RELATIONSHIP: (relationship, 5),
-    GraphStructure.PATH: (path, 3),
-    GraphStructure.UNBOUND_RELATIONSHIP: (unbound_relationship, 3)
-}
-
-
-# Encode messages as structs (bytes objects)
-def pack_message(marker, *, buf=None, params=None, max_content_len=8192):
+# Serialize messages as structs (bytes objects)
+def serialize_message(marker, *, buf=None, params=None, max_content_len=8192):
     """Take a marker and params and return a chunked Bolt message"""
     if not params:
         params = ()
     if not buf:
         buf = buffer.ChunkedWriteBuffer(max_content_len)
     buf = pack_structure(marker, buf, params)
-    buf.write_eof(END_MARKER)
+    buf.write_eof()
     return buf
 
 
@@ -324,20 +307,13 @@ def pack(val, buf):
         buf.write(pack_uint_8(Marker.NULL))
         return buf
     try:
-        encode = ENCODERS[type(val)]
+        encode = SERIALIZERS[type(val)]
     except KeyError:
         raise ProtocolError("Unknown data type '{}' for value: {}".format(type(val), val))
     return encode(val, buf)
 
 
-ENCODERS = {
-    bool: pack_bool,
-    str: pack_str,
-    float: pack_float,
-    int: pack_int,
-    dict: pack_map,
-    list: pack_list,
-    OrderedDict: pack_map}  # this is for testing
+
 
 
 def unpack(buf):
@@ -350,14 +326,14 @@ def unpack(buf):
     else:
         decoder_key = marker >> 2
     try:
-        decode = DECODERS[decoder_key]
+        decode = DESERIALIZERS[decoder_key]
     except KeyError:
         raise ProtocolError("Unknown marker '{}'".format(marker))
     else:
         return decode(marker, buf)
 
 
-def unpack_message(buf):
+def deserialize_message(buf):
     marker, = unpack_uint_8(buf.read(1))
     try:
         return unpack_structure(marker, buf)
@@ -380,7 +356,7 @@ def unpack_structure(marker, buf):
     if size == 0:
         return zero_arg_message(signature)
     try:
-        structure, num_args = structure_signature_map[signature]
+        structure, num_args = STRUCTURE_SIGNATURE_MAP[signature]
     except KeyError:
         raise ProtocolError(
             "Unrecognized signature '{}' with size '{}'".format(
@@ -469,7 +445,7 @@ def unpack_map(marker, buf):
     return output
 
 
-DECODERS = {
+DESERIALIZERS = {
     0b1000: unpack_str,
     0b1001: unpack_list,
     0b1010: unpack_map,
@@ -480,4 +456,30 @@ DECODERS = {
     0b110100: unpack_str,
     0b110101: unpack_list,
     0b110110: unpack_map,
-    0b110111: unpack_structure}
+    0b110111: unpack_structure
+}
+
+
+SERIALIZERS = {
+    bool: pack_bool,
+    str: pack_str,
+    float: pack_float,
+    int: pack_int,
+    dict: pack_map,
+    list: pack_list,
+    OrderedDict: pack_map
+}  # this is for testing
+
+
+STRUCTURE_SIGNATURE_MAP = {
+    Message.INIT: (init, 2),
+    Message.RECORD: (detail, 1),
+    Message.FAILURE: (summary, 1),
+    Message.SUCCESS: (summary, 1),
+    Message.IGNORED: (summary, 1),
+    Message.RUN: (run, 2),
+    GraphStructure.NODE: (node, 3),
+    GraphStructure.RELATIONSHIP: (relationship, 5),
+    GraphStructure.PATH: (path, 3),
+    GraphStructure.UNBOUND_RELATIONSHIP: (unbound_relationship, 3)
+}

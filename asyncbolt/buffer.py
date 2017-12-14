@@ -22,7 +22,7 @@ class ChunkedWriteBuffer:
     def write(self, data):
         self._incoming.write(data)
 
-    def write_eof(self, eof):
+    def write_eof(self):
         data = self._incoming.getvalue()
         # Reset incoming
         self._incoming = self._buf_class()
@@ -37,7 +37,7 @@ class ChunkedWriteBuffer:
         data_size_plus4 = data_size + 4
         if data_size_plus4 <= self._current_buf_remaining:
             # This means we can fit len header, message, and eof all in current buf. Yay.
-            self._current_buf.write(messaging.pack_uint_16(data_size) + data + eof)
+            self._current_buf.write(messaging.pack_uint_16(data_size) + data + messaging.END_MARKER)
             self._current_buf_remaining -= data_size_plus4
             self._current_buf_size += data_size_plus4
         elif data_size_plus2 > self._current_buf_remaining:
@@ -49,13 +49,13 @@ class ChunkedWriteBuffer:
             more_data = data_view[chunk_size:]
             self.append_and_reset_buffer()
             self.write(more_data)
-            self.write_eof(eof)
+            self.write_eof()
         else:
             # BOOO
             # Buffer almost full, short message that would result in zero length message.
             self.append_and_reset_buffer()
             self.write(data)
-            self.write_eof(eof)
+            self.write_eof()
 
     def append_and_reset_buffer(self):
         if self._current_buf:

@@ -1,12 +1,15 @@
 # :zap:asyncbolt:zap:
 
-:zap:`asyncbolt`:zap: is an implementation of the Neo4j [Bolt](https://boltprotocol.org/) client/server protocol for Python [asyncio](https://docs.python.org/3/library/asyncio.html).
+:zap:`asyncbolt`:zap: [Neo4j](https://neo4j.com/) [Bolt](https://boltprotocol.org/) client/server protocol for Python.
 
-The `asyncbolt.session.ClientSession` object aims to be fully compatible with [Neo4j](https://neo4j.com/) (or any other server that
-speaks Bolt), but it isn't a replacement for a full featured Neo4j client.
+### Features
 
-- Python >= 3.6
-- 0 dependencies
+* Implementation of the Bolt protocol for [asyncio](https://docs.python.org/3/library/asyncio.html)
+* A [Bolt message transfer encoding](https://boltprotocol.org/v1/#message_transfer_encoding) parser
+* Serializer/deserializer for [Bolt messages](https://boltprotocol.org/v1/#messaging)
+* 0 dependencies
+
+**_Python>=3.6_**
 
 **WARNING** - *This project is not stable, possible breaking changes or bugs*
 
