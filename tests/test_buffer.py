@@ -1,3 +1,4 @@
 """Buffer tests"""
 
-# TODO
+def test_simple_write():
+    pass

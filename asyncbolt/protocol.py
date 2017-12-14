@@ -1,11 +1,10 @@
 """Bolt Protocol for Asyncio"""
 import asyncio
-import collections
 import logging
 
 from enum import IntEnum
 
-from asyncbolt import buffer, messaging
+from asyncbolt import buffer, messaging, parser
 from asyncbolt.exception import HandshakeError, ProtocolError, ServerFailedError, ServerIgnoredError
 
 logger = logging.getLogger(__name__)
@@ -34,26 +33,33 @@ class BoltProtocol(asyncio.Protocol):
         self.write_buffer = buffer.ChunkedWriteBuffer(8192)
         self.transport = None
         self.transport_write = None
+        self.parser = parser.BoltParser(self)
 
     def flush(self):
         for message in self.write_buffer.flush():
             log_debug("Writing message to transport\n'{}'\n".format(message))
             self.transport_write(message)
 
+    def connection_lost(self, exc):
+        raise NotImplementedError
+
     def connection_made(self, transport):
         self.transport = transport
         self.transport_write = self.transport.write
 
     def data_received(self, data):
-        self.read_buffer.feed_data(data)
+        self.parser.feed_data(data)
         log_debug('Data received:\n{}\n'.format(data))
         self.handle_incoming()
 
     def handle_incoming(self):
         raise NotImplementedError
 
-    def connection_lost(self, exc):
-        raise NotImplementedError
+    def on_chunk(self, chunk):
+        self.read_buffer.feed_data(chunk)
+
+    def on_message_complete(self):
+        self.read_buffer.feed_eof()
 
 
 class BoltServerProtocol(BoltProtocol):
@@ -63,7 +69,6 @@ class BoltServerProtocol(BoltProtocol):
         super().__init__(loop)
         self.server = server
         self.handshake_done = False
-        self.init_done = False
         self.state = ServerProtocolState.PROTOCOL_UNINITIALIZED
 
     def close(self):
@@ -76,26 +81,14 @@ class BoltServerProtocol(BoltProtocol):
         self.close()
 
     def data_received(self, data):
-        if not self.init_done:
-            if not self.handshake_done:
-                data_view = memoryview(data)
-                magic = data_view[:4]
-                if not magic == messaging.MAGIC:
-                    raise ProtocolError('Incorrect magic byte sequence')
-                log_debug('Handshake received')
-                self.check_protocol(data_view[4:])
-                self.handshake_done = True
-            else:
-                self.read_buffer.feed_data(data)
-                result = messaging.unpack_message(self.read_buffer)
-                assert result.signature == messaging.Message.INIT
-                self.on_init(result)
-                self.state = ServerProtocolState.PROTOCOL_READY
-                log_debug("Server session initialized with auth token '{}'".format(result.auth_token))
-                metadata = self.get_server_metadata()
-                self.success(metadata)
-                self.flush()
-                self.init_done = True
+        if not self.handshake_done:
+            data_view = memoryview(data)
+            magic = data_view[:4]
+            if not magic == messaging.MAGIC:
+                raise ProtocolError('Incorrect magic byte sequence')
+            log_debug('Handshake received')
+            self.check_protocol(data_view[4:])
+            self.handshake_done = True
         else:
             super().data_received(data)
 
@@ -118,7 +111,7 @@ class BoltServerProtocol(BoltProtocol):
         """Inheriting server protocol should implement this method"""
         return {"server": "AsyncBolt/1.0"}
 
-    def on_init(self, _):
+    def on_init(self, auth_token):
         """Inheriting server protocol should implement this method"""
 
     # Hooks for custom behavior in inheriting classes
@@ -132,7 +125,7 @@ class BoltServerProtocol(BoltProtocol):
         """Required! Send completed tasks to client!"""
         raise NotImplementedError
 
-    def on_run(self, _):
+    def on_run(self, statement, parameters):
         """Required! Run task received from client"""
         raise NotImplementedError
 
@@ -141,12 +134,12 @@ class BoltServerProtocol(BoltProtocol):
 
     def handle_incoming(self):
         while self.read_buffer.ready:
-            data = messaging.unpack_message(self.read_buffer)
+            data = messaging.deserialize_message(self.read_buffer)
             if self.state == ServerProtocolState.PROTOCOL_READY:
                 if data.signature == messaging.Message.RUN:
                     self.state = ServerProtocolState.PROTOCOL_RUNNING
-                    self.on_run(data)
-                elif data.signature == messaging.RESET:
+                    self.on_run(data.statement, data.parameters)
+                elif data.signature == messaging.Message.RESET:
                     self.reset()
                 else:
                     self.state = ServerProtocolState.PROTOCOL_FAILED
@@ -176,6 +169,22 @@ class BoltServerProtocol(BoltProtocol):
                 else:
                     self.ignored({})
                     self.flush()
+            elif self.state == ServerProtocolState.PROTOCOL_UNINITIALIZED:
+                if data.signature == messaging.Message.INIT:
+                    self.on_init(data.auth_token)
+                    self.state = ServerProtocolState.PROTOCOL_READY
+                    log_debug("Server session initialized with auth token '{}'".format(data.auth_token))
+                    metadata = self.get_server_metadata()
+                    self.success(metadata)
+                    self.flush()
+                else:
+                    self.state = ServerProtocolState.PROTOCOL_FAILED
+                    self.failure({})
+                    self.flush()
+            else:
+                self.state = ServerProtocolState.PROTOCOL_FAILED
+                self.failure({})
+                self.flush()
 
     def reset(self):
         self.on_reset()
@@ -190,16 +199,16 @@ class BoltServerProtocol(BoltProtocol):
 
     # Bolt message packing methods
     def record(self, fields):
-        messaging.pack_message(messaging.Message.RECORD, buf=self.write_buffer, params=(fields, ))
+        messaging.serialize_message(messaging.Message.RECORD, buf=self.write_buffer, params=(fields, ))
 
     def success(self, metadata):
-        messaging.pack_message(messaging.Message.SUCCESS, buf=self.write_buffer, params=(metadata, ))
+        messaging.serialize_message(messaging.Message.SUCCESS, buf=self.write_buffer, params=(metadata, ))
 
     def failure(self, metadata):
-        messaging.pack_message(messaging.Message.FAILURE, buf=self.write_buffer, params=(metadata,))
+        messaging.serialize_message(messaging.Message.FAILURE, buf=self.write_buffer, params=(metadata,))
 
     def ignored(self, metadata):
-        messaging.pack_message(messaging.Message.IGNORED, buf=self.write_buffer, params=(metadata,))
+        messaging.serialize_message(messaging.Message.IGNORED, buf=self.write_buffer, params=(metadata,))
 
 
 class BoltClientProtocol(BoltProtocol):
@@ -273,7 +282,7 @@ class BoltClientProtocol(BoltProtocol):
 
             await self.waiter
             self.reset_waiter()
-        data = messaging.unpack_message(self.read_buffer)
+        data = messaging.deserialize_message(self.read_buffer)
         if data[0] == messaging.Message.RECORD:
             return data
         if data[0] == messaging.Message.SUCCESS:
@@ -290,19 +299,19 @@ class BoltClientProtocol(BoltProtocol):
 
     # Bolt message packing methods
     def init(self, client_name, auth_token):
-        messaging.pack_message(messaging.Message.INIT, buf=self.write_buffer, params=(client_name, auth_token))
+        messaging.serialize_message(messaging.Message.INIT, buf=self.write_buffer, params=(client_name, auth_token))
 
     def run(self, statement, parameters):
-        messaging.pack_message(messaging.Message.RUN, buf=self.write_buffer, params=(statement, parameters))
+        messaging.serialize_message(messaging.Message.RUN, buf=self.write_buffer, params=(statement, parameters))
 
     def discard_all(self):
-        messaging.pack_message(messaging.Message.DISCARD_ALL, buf=self.write_buffer)
+        messaging.serialize_message(messaging.Message.DISCARD_ALL, buf=self.write_buffer)
 
     def pull_all(self):
-        messaging.pack_message(messaging.Message.PULL_ALL, buf=self.write_buffer)
+        messaging.serialize_message(messaging.Message.PULL_ALL, buf=self.write_buffer)
 
     def ack_failure(self):
-        messaging.pack_message(messaging.Message.ACK_FAILURE, buf=self.write_buffer)
+        messaging.serialize_message(messaging.Message.ACK_FAILURE, buf=self.write_buffer)
 
     def reset(self):
-        messaging.pack_message(messaging.Message.RESET, buf=self.write_buffer)
+        messaging.serialize_message(messaging.Message.RESET, buf=self.write_buffer)

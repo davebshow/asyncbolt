@@ -1,12 +1,16 @@
 # :zap:asyncbolt:zap:
 
-:zap:`asyncbolt`:zap: is an implementation of the Neo4j [Bolt](https://boltprotocol.org/) client/server protocol for Python [asyncio](https://docs.python.org/3/library/asyncio.html).
+:zap:`asyncbolt`:zap: [Neo4j](https://neo4j.com/) [Bolt](https://boltprotocol.org/) client/server protocol for Python.
 
-The `asyncbolt.session.ClientSession` object aims to be fully compatible with [Neo4j](https://neo4j.com/) (or any other server that
-speaks Bolt), but it isn't a replacement for a full featured Neo4j client.
+### Features
 
-- Python >= 3.6
-- 0 dependencies
+* Implementation of the Bolt protocol for [asyncio](https://docs.python.org/3/library/asyncio.html) `asyncbolt.BoltClientProtocol`, `asyncbolt.ClientSession`, `asyncbolt.BoltServerProtocol`, `asyncbolt.ServerSession`
+* A [Bolt message transfer encoding](https://boltprotocol.org/v1/#message_transfer_encoding) stateless parser `asyncbolt.BoltParser`
+* Serializer/deserializer for [Bolt messages](https://boltprotocol.org/v1/#messaging) `asyncbolt.message_serializer`, `asyncbolt.message_deserializer`
+* Chunked read/write buffer `asyncbolt.ChunkedReadBuffer` and `asyncbolt.ChunkedWriteBuffer` implementations with interfaces for `asyncbolt.message_serializer`, and `asyncbolt.message_deserializer`.
+* 0 dependencies
+
+**_Python>=3.6_**
 
 **WARNING** - *This project is not stable, possible breaking changes or bugs*
 
@@ -385,6 +389,56 @@ Users will almost never need to inherit directly from `asyncbolt.BoltServerProto
 If you are interested, `asyncbolt.ServerSession` inherits directly from the protocol, using `asyncio` objects to implement
 the Bolt session logic.
 
+## Bolt message transfer encoding parser
+
+`asyncbolt.BoltParser` is a stateless parser used for parsing incoming Bolt datastreams. The parser accepts a single
+argument `protocol`, which is a Python object that implements the methods `on_chunk`, and `on_message_complete`. A typical
+implementation would use the `asyncbolt.ChunkedReadBuffer` to assemble the chunks:
+
+```python
+class DummyProtocol:
+
+def __init__(self):
+    self.read_buffer = asyncbolt.ChunkedReadBuffer()
+    self.parser = asyncbolt.BoltParser(self)
+
+def data_received(self, data):
+    """Or however you get data"""
+    self.parser.feed_data(data)
+
+def on_chunk(self, chunk):
+    self.read_buffer.feed_data(chunk)
+    
+def on_message_complete(self):
+    self.read_buffer.feed_eof()
+```
+
+## Bolt message serializers/deserializers
+
+`asyncbolt.serialize_message` and `asyncbolt.deserialize_message` are responsible for translating between Python
+objects and C structs represented as bytes objects using the Bolt binary message serialization format.
+
+### Serialization
+`asyncbolt.serialize_message` has the following signature:
+
+```python
+serialize_message(signature, *, buf=None, params=None, max_chunk_size=8192):
+```
+
+* `signature` is a bolt message signature RECORD, SUCCESS, RUN etc. enumerated with `asyncbolt.Message`
+* `buf` is a Python object that implements the methods `write` and `write_eof`. Defaults to `asyncbolt.ChunkedWriteBuffer`
+* `params` a `tuple` of parameters that will be passed to the Bolt message
+* `max_chunk_size` is the maximum number of bytes sent in a single message. Passed to the default write buffer.
+
+### Deserialization
+`asyncbolt.deserialize_message` has the following signature:
+
+```python
+deserialize_message(buf):
+```
+
+* `buf` is a Python object that implements the method `read(n: int)` where `n` is the number of bytes that will be
+returned. Typically, an `asyncbolt.ChunkedReadBuffer` will be used
 
 ## TODOs
 :zap:`asyncbolt`:zap: needs a lot of work. Contributions are welcome.

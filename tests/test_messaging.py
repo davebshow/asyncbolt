@@ -2,7 +2,7 @@ import collections
 import pytest
 
 from asyncbolt.buffer import ChunkedReadBuffer
-from asyncbolt.messaging import pack_message, unpack_message, Message
+from asyncbolt.messaging import serialize_message, deserialize_message, Message
 
 
 def get_hexbytes(packed):
@@ -12,7 +12,7 @@ def get_hexbytes(packed):
 # These tests are based on Error handling with Reset
 # https://boltprotocol.org/v1/#examples-reset
 def test_pack_init_message():
-    output = pack_message(
+    output = serialize_message(
         Message.INIT,
         params=("MyClient/1.0", collections.OrderedDict([("scheme", "basic"), ("principal", "neo4j"), ("credentials", "secret")])))
     expected = """0 40 B2 1  8C 4D 79 43  6C 69 65 6E  74 2F 31 2E
@@ -25,7 +25,7 @@ def test_pack_init_message():
 
 
 def test_pack_success_message():
-    output = pack_message(
+    output = serialize_message(
         Message.SUCCESS,
         params=({"server": "Neo4j/3.1.0"},))
     expected = """0 16 B1 70  A1 86 73 65  72 76 65 72  8B 4E 65 6F
@@ -35,7 +35,7 @@ def test_pack_success_message():
 
 
 def test_pack_run_message():
-    output = pack_message(
+    output = serialize_message(
         Message.RUN,
         params=("This will cause a syntax error", {}))
     expected = """0 23 b2 10  d0 1e 54 68  69 73 20 77  69 6c 6c 20
@@ -46,7 +46,7 @@ def test_pack_run_message():
 
 
 def test_pack_good_run_message():
-    output = pack_message(
+    output = serialize_message(
         Message.RUN,
         params=("RETURN 1 AS num", {}))
     expected = """0 13 b2 10  8f 52 45 54  55 52 4e 20  31 20 41 53
@@ -57,7 +57,7 @@ def test_pack_good_run_message():
 
 @pytest.mark.skip(reason="Suspicious failure. Under investigation")
 def test_pack_failure_message():
-    output = pack_message(
+    output = serialize_message(
         Message.FAILURE,
         params=(collections.OrderedDict(
             [("code", "Neo.ClientError.Statement.SyntaxError"),
@@ -79,155 +79,155 @@ def test_pack_failure_message():
 
 
 def test_pack_pull_all():
-    output = pack_message(Message.PULL_ALL)
+    output = serialize_message(Message.PULL_ALL)
     expected = """0 2 b0 3f 0 0""".replace(' ', '').lower()
     output = get_hexbytes(output.getvalue())
     assert output.replace('0x', '').lower() == expected
 
 
 def test_pack_ignored():
-    output = pack_message(Message.IGNORED)
+    output = serialize_message(Message.IGNORED)
     expected = """0 2 b0 7e 0 0""".replace(' ', '').lower()
     output = get_hexbytes(output.getvalue())
     assert output.replace('0x', '').lower() == expected
 
 
 def test_pack_reset():
-    output = pack_message(Message.RESET)
+    output = serialize_message(Message.RESET)
     expected = """0 2 b0 f 0 0""".replace(' ', '').lower()
     output = get_hexbytes(output.getvalue())
     assert output.replace('0x', '').lower() == expected
 
 
 def test_pack_ack_failure():
-    output = pack_message(Message.ACK_FAILURE)
+    output = serialize_message(Message.ACK_FAILURE)
     expected = """0 2 B0 E  0 0""".replace(' ', '').lower()
     output = get_hexbytes(output.getvalue())
     assert output.replace('0x', '').lower() == expected
 
 
 def test_pack_record():
-    output = pack_message(Message.RECORD, params=([1],))
+    output = serialize_message(Message.RECORD, params=([1],))
     expected = """0 4 b1 71  91 1 0 0""".replace(' ', '').lower()
     output = get_hexbytes(output.getvalue())
     assert output.replace('0x', '').lower() == expected
 
 
 # Test chunker, discard all
-def test_unpack_record_int():
-    output = pack_message(Message.RECORD, params=([1, 2, 3],)).getvalue()
-    buf = ChunkedReadBuffer()
-    buf.feed_data(output)
-    record = unpack_message(buf)
+def test_unpack_record_int(dummy_read_buffer_pair):
+    dummy, buf = dummy_read_buffer_pair
+    output = serialize_message(Message.RECORD, params=([1, 2, 3],)).getvalue()
+    dummy.feed_data(output)
+    record = deserialize_message(buf)
     assert record.fields == [1, 2, 3]
 
 
-def test_unpack_record_int_sizes():
-    output = pack_message(Message.RECORD, params=([1, 1234, -1234, 40000, -40000],)).getvalue()
-    buf = ChunkedReadBuffer()
-    buf.feed_data(output)
-    record = unpack_message(buf)
+def test_unpack_record_int_sizes(dummy_read_buffer_pair):
+    dummy, buf = dummy_read_buffer_pair
+    output = serialize_message(Message.RECORD, params=([1, 1234, -1234, 40000, -40000],)).getvalue()
+    dummy.feed_data(output)
+    record = deserialize_message(buf)
     assert record.fields == [1, 1234, -1234, 40000, -40000]
 
 
-def test_unpack_record_negint():
-    output = pack_message(Message.RECORD, params=([-1, -2, -3],)).getvalue()
-    buf = ChunkedReadBuffer()
-    buf.feed_data(output)
-    record = unpack_message(buf)
+def test_unpack_record_negint(dummy_read_buffer_pair):
+    dummy, buf = dummy_read_buffer_pair
+    output = serialize_message(Message.RECORD, params=([-1, -2, -3],)).getvalue()
+    dummy.feed_data(output)
+    record = deserialize_message(buf)
     assert record.fields == [-1, -2, -3]
 
 
-def test_unpack_record_float():
-    output = pack_message(Message.RECORD, params=([1.1, 2.2, 3.3],)).getvalue()
-    buf = ChunkedReadBuffer()
-    buf.feed_data(output)
-    record = unpack_message(buf)
+def test_unpack_record_float(dummy_read_buffer_pair):
+    dummy, buf = dummy_read_buffer_pair
+    output = serialize_message(Message.RECORD, params=([1.1, 2.2, 3.3],)).getvalue()
+    dummy.feed_data(output)
+    record = deserialize_message(buf)
     assert record.fields == [1.1, 2.2, 3.3]
 
 
-def test_unpack_record_string():
-    output = pack_message(Message.RECORD, params=(['a', 'b', 'c'],)).getvalue()
-    buf = ChunkedReadBuffer()
-    buf.feed_data(output)
-    record = unpack_message(buf)
+def test_unpack_record_string(dummy_read_buffer_pair):
+    dummy, buf = dummy_read_buffer_pair
+    output = serialize_message(Message.RECORD, params=(['a', 'b', 'c'],)).getvalue()
+    dummy.feed_data(output)
+    record = deserialize_message(buf)
     assert record.fields == ['a', 'b', 'c']
 
 
-def test_unpack_record_dict():
-    output = pack_message(Message.RECORD, params=([{'a': 'b'}],)).getvalue()
-    buf = ChunkedReadBuffer()
-    buf.feed_data(output)
-    record = unpack_message(buf)
+def test_unpack_record_dict(dummy_read_buffer_pair):
+    dummy, buf = dummy_read_buffer_pair
+    output = serialize_message(Message.RECORD, params=([{'a': 'b'}],)).getvalue()
+    dummy.feed_data(output)
+    record = deserialize_message(buf)
     assert record.fields == [{'a': 'b'}]
 
 
-def test_unpack_record_mixed_types():
-    output = pack_message(Message.RECORD, params=([1, 'hello', {'hello': 'world'}],)).getvalue()
-    buf = ChunkedReadBuffer()
-    buf.feed_data(output)
-    record = unpack_message(buf)
+def test_unpack_record_mixed_types(dummy_read_buffer_pair):
+    dummy, buf = dummy_read_buffer_pair
+    output = serialize_message(Message.RECORD, params=([1, 'hello', {'hello': 'world'}],)).getvalue()
+    dummy.feed_data(output)
+    record = deserialize_message(buf)
     assert record.fields == [1, 'hello', {'hello': 'world'}]
 
 
-def test_unpack_record_mixed_types_containers():
-    output = pack_message(
+def test_unpack_record_mixed_types_containers(dummy_read_buffer_pair):
+    dummy, buf = dummy_read_buffer_pair
+    output = serialize_message(
         Message.RECORD, params=([1, 'hello', {'hello': ['world', 'hello', None, True, False]}, [1, 2, 3]],)).getvalue()
-    buf = ChunkedReadBuffer()
-    buf.feed_data(output)
-    record = unpack_message(buf)
+    dummy.feed_data(output)
+    record = deserialize_message(buf)
     assert record.fields == [1, 'hello', {'hello': ['world', 'hello', None, True, False]}, [1, 2, 3]]
 
 
-def test_unpack_init_message():
-    output = pack_message(
+def test_unpack_init_message(dummy_read_buffer_pair):
+    dummy, buf = dummy_read_buffer_pair
+    output = serialize_message(
         Message.INIT,
         params=("MyClient/1.0",
                 collections.OrderedDict([("scheme", "basic"), ("principal", "neo4j"), ("credentials", "secret")]))).getvalue()
-    buf = ChunkedReadBuffer()
-    buf.feed_data(output)
-    init = unpack_message(buf)
+    dummy.feed_data(output)
+    init = deserialize_message(buf)
     assert init.client_name == "MyClient/1.0"
     assert init.auth_token["scheme"] == "basic"
     assert init.auth_token["principal"] == "neo4j"
     assert init.auth_token["credentials"] == "secret"
 
 
-def test_unpack_success_message():
-    output = pack_message(
+def test_unpack_success_message(dummy_read_buffer_pair):
+    dummy, buf = dummy_read_buffer_pair
+    output = serialize_message(
         Message.SUCCESS,
         params=({"server": "Neo4j/3.1.0"},)).getvalue()
-    buf = ChunkedReadBuffer()
-    buf.feed_data(output)
-    success = unpack_message(buf)
+    dummy.feed_data(output)
+    success = deserialize_message(buf)
     assert success.metadata == {"server": "Neo4j/3.1.0"}
 
 
-def test_unpack_good_run_message():
-    output = pack_message(
+def test_unpack_good_run_message(dummy_read_buffer_pair):
+    dummy, buf = dummy_read_buffer_pair
+    output = serialize_message(
         Message.RUN,
         params=("RETURN 1 AS num", {})).getvalue()
-    buf = ChunkedReadBuffer()
-    buf.feed_data(output)
-    run = unpack_message(buf)
+    dummy.feed_data(output)
+    run = deserialize_message(buf)
     assert run.statement == "RETURN 1 AS num"
     assert run.parameters == {}
 
 
-def test_unpack_good_run_message_with_args():
-    output = pack_message(
+def test_unpack_good_run_message_with_args(dummy_read_buffer_pair):
+    dummy, buf = dummy_read_buffer_pair
+    output = serialize_message(
         Message.RUN,
         params=("RETURN 1 AS num", {'a': 1})).getvalue()
-    buf = ChunkedReadBuffer()
-    buf.feed_data(output)
-    run = unpack_message(buf)
+    dummy.feed_data(output)
+    run = deserialize_message(buf)
     assert run.statement == "RETURN 1 AS num"
     assert run.parameters == {'a': 1}
 
 
-def test_unpack_pull_all():
-    output = pack_message(Message.PULL_ALL).getvalue()
-    buf = ChunkedReadBuffer()
-    buf.feed_data(output)
-    pull_all = unpack_message(buf)
+def test_unpack_pull_all(dummy_read_buffer_pair):
+    dummy, buf = dummy_read_buffer_pair
+    output = serialize_message(Message.PULL_ALL).getvalue()
+    dummy.feed_data(output)
+    pull_all = deserialize_message(buf)
     assert pull_all.signature == Message.PULL_ALL

@@ -5,7 +5,7 @@ import logging
 
 from asyncbolt.protocol import BoltClientProtocol
 from asyncbolt.exception import ProtocolError, BoltClientError, ServerFailedError, ServerIgnoredError
-from asyncbolt.messaging import Message, pack_message
+from asyncbolt.messaging import Message, serialize_message
 
 logger = logging.getLogger(__name__)
 log_debug = logger.debug
@@ -24,7 +24,7 @@ async def connect(*,
                   port=None,
                   ssl=None,
                   on_failure=None,
-                  max_inflight=1024,
+                  max_inflight=2048,
                   **kwargs):
     """
     Connect to the Bolt server and initialize session
@@ -118,7 +118,7 @@ class ClientSession:
             except (ServerFailedError, AssertionError) as e:
                 # Failed run. Send ack and read ignored messages until server succeeds with reset
                 self._inflight -= 1
-                pack_message(self._on_failure, buf=self._protocol.write_buffer)
+                serialize_message(self._on_failure, buf=self._protocol.write_buffer)
                 self._protocol.flush()
                 while True:
                     try:
@@ -158,6 +158,8 @@ class ClientSession:
         self._inflight += 2
 
     async def reset(self):
+        """???What is expected client session behavior on RESET???"""
+        # TODO investigate this method
         if self._inflight > self._max_inflight:
             raise BoltClientError('Exceeded max number of pipelined messages')
         self._protocol.reset()
