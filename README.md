@@ -422,11 +422,11 @@ objects and C structs represented as bytes objects using the Bolt binary message
 `asyncbolt.serialize_message` has the following signature:
 
 ```python
-serialize_message(signature, *, buf=None, params=None, max_chunk_size=8192):
+serialize_message(signature, *, buf=None, params=None, max_chunk_size=8192)
 ```
 
 * `signature` is a bolt message signature RECORD, SUCCESS, RUN etc. enumerated with `asyncbolt.Message`
-* `buf` is a Python object that implements the methods `write` and `write_eof`. Defaults to `asyncbolt.ChunkedWriteBuffer`
+* `buf` is a Python object that implements the methods `write(data: bytes)` and `write_eof()`. Defaults to `asyncbolt.ChunkedWriteBuffer`
 * `params` a `tuple` of parameters that will be passed to the Bolt message
 * `max_chunk_size` is the maximum number of bytes sent in a single message. Passed to the default write buffer.
 
@@ -434,7 +434,7 @@ serialize_message(signature, *, buf=None, params=None, max_chunk_size=8192):
 `asyncbolt.deserialize_message` has the following signature:
 
 ```python
-deserialize_message(buf):
+deserialize_message(buf)
 ```
 
 * `buf` is a Python object that implements the method `read(n: int)` where `n` is the number of bytes that will be
