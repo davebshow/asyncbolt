@@ -1,5 +1,11 @@
 import asyncio
+import logging
+
 import asyncbolt
+
+
+# FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+# logging.basicConfig(level=logging.DEBUG, format=FORMAT)
 
 
 async def echo(loop):
@@ -7,6 +13,7 @@ async def echo(loop):
     results = []
     async for msg in client_session.run('Hello world', {}, get_eof=True):
         results.append(msg)
+    client_session.close()
     return results
 
 

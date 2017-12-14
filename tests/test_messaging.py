@@ -114,78 +114,78 @@ def test_pack_record():
 
 
 # Test chunker, discard all
-def test_unpack_record_int():
+def test_unpack_record_int(dummy_read_buffer_pair):
+    dummy, buf = dummy_read_buffer_pair
     output = pack_message(Message.RECORD, params=([1, 2, 3],)).getvalue()
-    buf = ChunkedReadBuffer()
-    buf.feed_data(output)
+    dummy.feed_data(output)
     record = unpack_message(buf)
     assert record.fields == [1, 2, 3]
 
 
-def test_unpack_record_int_sizes():
+def test_unpack_record_int_sizes(dummy_read_buffer_pair):
+    dummy, buf = dummy_read_buffer_pair
     output = pack_message(Message.RECORD, params=([1, 1234, -1234, 40000, -40000],)).getvalue()
-    buf = ChunkedReadBuffer()
-    buf.feed_data(output)
+    dummy.feed_data(output)
     record = unpack_message(buf)
     assert record.fields == [1, 1234, -1234, 40000, -40000]
 
 
-def test_unpack_record_negint():
+def test_unpack_record_negint(dummy_read_buffer_pair):
+    dummy, buf = dummy_read_buffer_pair
     output = pack_message(Message.RECORD, params=([-1, -2, -3],)).getvalue()
-    buf = ChunkedReadBuffer()
-    buf.feed_data(output)
+    dummy.feed_data(output)
     record = unpack_message(buf)
     assert record.fields == [-1, -2, -3]
 
 
-def test_unpack_record_float():
+def test_unpack_record_float(dummy_read_buffer_pair):
+    dummy, buf = dummy_read_buffer_pair
     output = pack_message(Message.RECORD, params=([1.1, 2.2, 3.3],)).getvalue()
-    buf = ChunkedReadBuffer()
-    buf.feed_data(output)
+    dummy.feed_data(output)
     record = unpack_message(buf)
     assert record.fields == [1.1, 2.2, 3.3]
 
 
-def test_unpack_record_string():
+def test_unpack_record_string(dummy_read_buffer_pair):
+    dummy, buf = dummy_read_buffer_pair
     output = pack_message(Message.RECORD, params=(['a', 'b', 'c'],)).getvalue()
-    buf = ChunkedReadBuffer()
-    buf.feed_data(output)
+    dummy.feed_data(output)
     record = unpack_message(buf)
     assert record.fields == ['a', 'b', 'c']
 
 
-def test_unpack_record_dict():
+def test_unpack_record_dict(dummy_read_buffer_pair):
+    dummy, buf = dummy_read_buffer_pair
     output = pack_message(Message.RECORD, params=([{'a': 'b'}],)).getvalue()
-    buf = ChunkedReadBuffer()
-    buf.feed_data(output)
+    dummy.feed_data(output)
     record = unpack_message(buf)
     assert record.fields == [{'a': 'b'}]
 
 
-def test_unpack_record_mixed_types():
+def test_unpack_record_mixed_types(dummy_read_buffer_pair):
+    dummy, buf = dummy_read_buffer_pair
     output = pack_message(Message.RECORD, params=([1, 'hello', {'hello': 'world'}],)).getvalue()
-    buf = ChunkedReadBuffer()
-    buf.feed_data(output)
+    dummy.feed_data(output)
     record = unpack_message(buf)
     assert record.fields == [1, 'hello', {'hello': 'world'}]
 
 
-def test_unpack_record_mixed_types_containers():
+def test_unpack_record_mixed_types_containers(dummy_read_buffer_pair):
+    dummy, buf = dummy_read_buffer_pair
     output = pack_message(
         Message.RECORD, params=([1, 'hello', {'hello': ['world', 'hello', None, True, False]}, [1, 2, 3]],)).getvalue()
-    buf = ChunkedReadBuffer()
-    buf.feed_data(output)
+    dummy.feed_data(output)
     record = unpack_message(buf)
     assert record.fields == [1, 'hello', {'hello': ['world', 'hello', None, True, False]}, [1, 2, 3]]
 
 
-def test_unpack_init_message():
+def test_unpack_init_message(dummy_read_buffer_pair):
+    dummy, buf = dummy_read_buffer_pair
     output = pack_message(
         Message.INIT,
         params=("MyClient/1.0",
                 collections.OrderedDict([("scheme", "basic"), ("principal", "neo4j"), ("credentials", "secret")]))).getvalue()
-    buf = ChunkedReadBuffer()
-    buf.feed_data(output)
+    dummy.feed_data(output)
     init = unpack_message(buf)
     assert init.client_name == "MyClient/1.0"
     assert init.auth_token["scheme"] == "basic"
@@ -193,41 +193,41 @@ def test_unpack_init_message():
     assert init.auth_token["credentials"] == "secret"
 
 
-def test_unpack_success_message():
+def test_unpack_success_message(dummy_read_buffer_pair):
+    dummy, buf = dummy_read_buffer_pair
     output = pack_message(
         Message.SUCCESS,
         params=({"server": "Neo4j/3.1.0"},)).getvalue()
-    buf = ChunkedReadBuffer()
-    buf.feed_data(output)
+    dummy.feed_data(output)
     success = unpack_message(buf)
     assert success.metadata == {"server": "Neo4j/3.1.0"}
 
 
-def test_unpack_good_run_message():
+def test_unpack_good_run_message(dummy_read_buffer_pair):
+    dummy, buf = dummy_read_buffer_pair
     output = pack_message(
         Message.RUN,
         params=("RETURN 1 AS num", {})).getvalue()
-    buf = ChunkedReadBuffer()
-    buf.feed_data(output)
+    dummy.feed_data(output)
     run = unpack_message(buf)
     assert run.statement == "RETURN 1 AS num"
     assert run.parameters == {}
 
 
-def test_unpack_good_run_message_with_args():
+def test_unpack_good_run_message_with_args(dummy_read_buffer_pair):
+    dummy, buf = dummy_read_buffer_pair
     output = pack_message(
         Message.RUN,
         params=("RETURN 1 AS num", {'a': 1})).getvalue()
-    buf = ChunkedReadBuffer()
-    buf.feed_data(output)
+    dummy.feed_data(output)
     run = unpack_message(buf)
     assert run.statement == "RETURN 1 AS num"
     assert run.parameters == {'a': 1}
 
 
-def test_unpack_pull_all():
+def test_unpack_pull_all(dummy_read_buffer_pair):
+    dummy, buf = dummy_read_buffer_pair
     output = pack_message(Message.PULL_ALL).getvalue()
-    buf = ChunkedReadBuffer()
-    buf.feed_data(output)
+    dummy.feed_data(output)
     pull_all = unpack_message(buf)
     assert pull_all.signature == Message.PULL_ALL

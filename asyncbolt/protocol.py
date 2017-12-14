@@ -5,7 +5,7 @@ import logging
 
 from enum import IntEnum
 
-from asyncbolt import buffer, messaging
+from asyncbolt import buffer, messaging, parser
 from asyncbolt.exception import HandshakeError, ProtocolError, ServerFailedError, ServerIgnoredError
 
 logger = logging.getLogger(__name__)
@@ -34,26 +34,33 @@ class BoltProtocol(asyncio.Protocol):
         self.write_buffer = buffer.ChunkedWriteBuffer(8192)
         self.transport = None
         self.transport_write = None
+        self.parser = parser.BoltParser(self)
 
     def flush(self):
         for message in self.write_buffer.flush():
             log_debug("Writing message to transport\n'{}'\n".format(message))
             self.transport_write(message)
 
+    def connection_lost(self, exc):
+        raise NotImplementedError
+
     def connection_made(self, transport):
         self.transport = transport
         self.transport_write = self.transport.write
 
     def data_received(self, data):
-        self.read_buffer.feed_data(data)
+        self.parser.feed_data(data)
         log_debug('Data received:\n{}\n'.format(data))
         self.handle_incoming()
 
     def handle_incoming(self):
         raise NotImplementedError
 
-    def connection_lost(self, exc):
-        raise NotImplementedError
+    def on_chunk(self, chunk):
+        self.read_buffer.feed_data(chunk)
+
+    def on_message_complete(self):
+        self.read_buffer.feed_eof()
 
 
 class BoltServerProtocol(BoltProtocol):
@@ -86,7 +93,7 @@ class BoltServerProtocol(BoltProtocol):
                 self.check_protocol(data_view[4:])
                 self.handshake_done = True
             else:
-                self.read_buffer.feed_data(data)
+                self.parser.feed_data(data)
                 result = messaging.unpack_message(self.read_buffer)
                 assert result.signature == messaging.Message.INIT
                 self.on_init(result)
